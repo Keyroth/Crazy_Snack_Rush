@@ -1,8 +1,43 @@
+"""
+juego.py  —  Crazy Snack Rush TEC
+Todo en un solo archivo. Vista top-down 2D (estilo Bomberman).
+
+SÍMBOLOS DEL MAPA:
+  S = Suelo     (zona caminable)
+  P = Pared     (bloqueada)
+  M = Mesa      (superficie, no caminable)
+  E = Entrega   (única por escenario)
+  B = Basurero  (tira lo que llevas)
+  C = Cocina    (fríe carnes/proteínas)
+  T = Tabla     (pica vegetales)
+  F = Freidora  (solo papas fritas)
+  1..9 = Despensas individuales (cada número dispensa un ingrediente distinto)
+"""
+
 import os
 import tkinter as tk
+from tkinter import messagebox
 from PIL import Image, ImageTk
 import random
 
+# ══════════════════════════════════════════════════════════════════════
+#  ESTRUCTURA DE MEMORIA GLOBAL (HISTORIAL ACUMULATIVO)
+# ══════════════════════════════════════════════════════════════════════
+HISTORIAL_PUNTOS = {
+    1: "-",  # McDonald's
+    2: "-",  # La Soda
+    3: "-"   # Hong Kong
+}
+
+HISTORIAL_ENTREGAS = {
+    1: "-",
+    2: "-",
+    3: "-"
+}
+
+# ══════════════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN GLOBAL
+# ══════════════════════════════════════════════════════════════════════
 T      = 56          
 COLS   = 14          
 FILAS  = 11          
@@ -20,19 +55,8 @@ IMAGEN_CELDA = {
     "COCINA":      None,
     "TABLA":       None,
     "FREIDORA":    None,
-    "DESPENSA_1":  None,   
-    "DESPENSA_2":  None,
-    "DESPENSA_3":  None,
-    "DESPENSA_4":  None,
-    "DESPENSA_5":  None,
-    "DESPENSA_6":  None,
-    "DESPENSA_7":  None,
-    "DESPENSA_8":  None,
-    "DESPENSA_9":  None,
+    **{f"DESPENSA_{i}": None for i in range(10)}
 }
-
-IMAGEN_CHEF_1 = None   
-IMAGEN_CHEF_2 = None   
 
 COLOR_CELDA = {
     "SUELO":      "#D6CCB4",   
@@ -43,15 +67,16 @@ COLOR_CELDA = {
     "COCINA":     "#D96A25",   
     "TABLA":      "#8B5E3C",   
     "FREIDORA":   "#D4B800",   
-    "DESPENSA_1": "#4CAF50",   
-    "DESPENSA_2": "#8BC34A",   
-    "DESPENSA_3": "#F44336",   
-    "DESPENSA_4": "#FF9800",   
-    "DESPENSA_5": "#9C27B0",   
-    "DESPENSA_6": "#00BCD4",   
-    "DESPENSA_7": "#E91E63",   
-    "DESPENSA_8": "#795548",   
-    "DESPENSA_9": "#607D8B",   
+    "DESPENSA_0": "#795548",   # Papa
+    "DESPENSA_1": "#FF9800",   # Pan
+    "DESPENSA_2": "#F44336",   # Tomate
+    "DESPENSA_3": "#4CAF50",   # Lechuga
+    "DESPENSA_4": "#9C27B0",   # Pollo
+    "DESPENSA_5": "#00BCD4",   # Agua
+    "DESPENSA_6": "#E91E63",   # Chuleta
+    "DESPENSA_7": "#9E9E9E",   # Arroz
+    "DESPENSA_8": "#3F51B5",   # Pasta
+    "DESPENSA_9": "#009688",   # Pescado
 }
 
 ETIQUETA_CELDA = {
@@ -61,191 +86,173 @@ ETIQUETA_CELDA = {
     "COCINA":     "COCI",
     "TABLA":      "TBL",
     "FREIDORA":   "FRY",
-    "DESPENSA_1": "D1",
-    "DESPENSA_2": "D2",
-    "DESPENSA_3": "D3",
-    "DESPENSA_4": "D4",
-    "DESPENSA_5": "D5",
-    "DESPENSA_6": "D6",
-    "DESPENSA_7": "D7",
-    "DESPENSA_8": "D8",
-    "DESPENSA_9": "D9",
+    **{f"DESPENSA_{i}": f"D{i}" for i in range(10)}
+}
+
+INGREDIENTES_MAESTROS = {
+    0: ("Papa", "crudo"),
+    1: ("Pan", "listo"),
+    2: ("Tomate", "crudo"),
+    3: ("Lechuga", "crudo"),
+    4: ("Pollo", "crudo"),
+    5: ("Agua", "crudo"),
+    6: ("Chuleta", "crudo"),
+    7: ("Arroz", "crudo"),
+    8: ("Pasta", "crudo"),
+    9: ("Pescado", "crudo")
 }
 
 def _ingrediente_despensa(numero: int):
-    tabla = {
-        1: lambda: Vegetal("Lechuga"),
-        2: lambda: Vegetal("Tomate"),
-        3: lambda: Proteina("Carne"),
-        4: lambda: Proteina("Pollo"),
-        5: lambda: Pan("Pan"),
-        6: lambda: Pan("Tortilla"),
-        7: lambda: Papa(),
-        8: lambda: Vegetal("Cebolla"),
-        9: lambda: Vegetal("Pepino"),
+    if numero in INGREDIENTES_MAESTROS:
+        nombre, estado = INGREDIENTES_MAESTROS[numero]
+        if nombre == "Pan":
+            return Pan(nombre)
+        return Ingrediente(nombre, estado)
+    return None
+
+CONFIG_ESCENARIOS = {
+    1: {
+        "nombre_local": "MCDONALD'S",
+        "recetas": ["Hamburguesa", "Papas Fritas", "Pollo Frito"],
+        "mapa_raw": [
+            "PPPPPPPPPPPPPP",
+            "P0 1 2 3 4MM M",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "PCTFB       EP",  
+            "PPPPPPPPPPPPPP",
+        ]
+    },
+    2: {
+        "nombre_local": "LA SODA",
+        "recetas": ["Sopa", "Ensalada", "Casado"],
+        "mapa_raw": [
+            "PPPPPPPPPPPPPP",
+            "P2 0 5 3 6 7MM",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "PCTFB       EP",  
+            "PPPPPPPPPPPPPP",
+        ]
+    },
+    3: {
+        "nombre_local": "HONG KONG",
+        "recetas": ["Sushi", "Ensalada", "Sopa de Pescado", "Chopsuy"],
+        "mapa_raw": [
+            "PPPPPPPPPPPPPP",
+            "P2 7 9 8 0 5MM",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "P            P",  
+            "PCTFB       EP",  
+            "PPPPPPPPPPPPPP",
+        ]
     }
-    fabrica = tabla.get(numero)
-    return fabrica() if fabrica else None
-
-MAPA_RAW = [
-    "PPPPPPPPPPPPPP",
-    "P1 2 3MMMMMM P",  
-    "P            P",  
-    "P            P",  
-    "P            P",  
-    "P            P",  
-    "P            P",  
-    "P            P",  
-    "P            P",  
-    "PCTFB       EP",  
-    "PPPPPPPPPPPPPP",
-]
-
-_SIMBOLO_A_TIPO = {
-    "S": "SUELO",
-    " ": "SUELO",   
-    "P": "PARED",
-    "M": "MESA",
-    "E": "ENTREGA",
-    "B": "BASURERO",
-    "C": "COCINA",
-    "T": "TABLA",
-    "F": "FREIDORA",
-    "1": "DESPENSA_1",
-    "2": "DESPENSA_2",
-    "3": "DESPENSA_3",
-    "4": "DESPENSA_4",
-    "5": "DESPENSA_5",
-    "6": "DESPENSA_6",
-    "7": "DESPENSA_7",
-    "8": "DESPENSA_8",
-    "9": "DESPENSA_9",
 }
 
 def _parsear_mapa(raw):
-    return [[_SIMBOLO_A_TIPO.get(c, "SUELO") for c in fila] for fila in raw]
+    simbolos = {
+        " ": "SUELO", "P": "PARED", "M": "MESA", "E": "ENTREGA",
+        "B": "BASURERO", "C": "COCINA", "T": "TABLA", "F": "FREIDORA"
+    }
+    for i in range(10):
+        simbolos[str(i)] = f"DESPENSA_{i}"
+    return [[simbolos.get(c, "SUELO") for c in fila] for fila in raw]
 
-MAPA_ESC1 = _parsear_mapa(MAPA_RAW)
+TIPOS_BLOQUEADOS = {"PARED", "MESA", "ENTREGA", "BASURERO", "COCINA", "TABLA", "FREIDORA"}
+for i in range(10):
+    TIPOS_BLOQUEADOS.add(f"DESPENSA_{i}")
 
-TIPOS_BLOQUEADOS = {
-    "PARED", "MESA", "ENTREGA", "BASURERO",
-    "COCINA", "TABLA", "FREIDORA",
-    "DESPENSA_1","DESPENSA_2","DESPENSA_3",
-    "DESPENSA_4","DESPENSA_5","DESPENSA_6",
-    "DESPENSA_7","DESPENSA_8","DESPENSA_9",
-}
+# ══════════════════════════════════════════════════════════════════════
+#  LÓGICA DEL JUEGO (CLASES)
+# ══════════════════════════════════════════════════════════════════════
 
 class Ingrediente:
-    def __init__(self, nombre: str):
-        self._nombre = nombre
-        self._estado = "crudo"
-
-    @property
-    def nombre(self): return self._nombre
-    @property
-    def estado(self): return self._estado
-
-    def set_estado(self, e: str): self._estado = e
-
-    def _preparar_recursivo(self, pasos: int):
-        if pasos <= 0:
-            self._estado = "preparado"
-            return
-        self._preparar_recursivo(pasos - 1)
-
-    def __repr__(self):
-        return f"{self._nombre}[{self._estado}]"
-
-
-class Vegetal(Ingrediente):
-    def __init__(self, nombre: str):
-        super().__init__(nombre)
-        self.estacion_requerida = "TABLA"
+    def __init__(self, nombre: str, estado: str = "crudo"):
+        self.nombre = nombre
+        self.estado = estado
 
     def cortar(self):
-        self._preparar_recursivo(3)
+        if self.estado == "crudo" and self.nombre in ["Tomate", "Lechuga", "Papa"]:
+            self.estado = "picado"
+
+    def cocinar(self):
+        if self.nombre in ["Agua", "Arroz", "Chuleta", "Pasta", "Pescado"] and self.estado == "crudo":
+            self.estado = "cocinado"
+        elif self.nombre == "Pollo" and self.estado == "crudo":
+            self.estado = "frito"
+
+    def freir(self):
+        if self.nombre == "Papa" and self.estado == "picado":
+            self.estado = "frito"
 
 
 class Pan(Ingrediente):
     def __init__(self, nombre: str):
-        super().__init__(nombre)
-        self.estacion_requerida = None
-        self._estado = "preparado"
+        super().__init__(nombre, "listo")
 
 
-class Proteina(Ingrediente):
+class Platillo:
     def __init__(self, nombre: str):
-        super().__init__(nombre)
-        self.__cocinada = False
-        self.estacion_requerida = "COCINA"
-
-    @property
-    def cocinada(self): return self.__cocinada
-
-    def cocinar(self):
-        self.__cocinada = True
-        self._preparar_recursivo(4)
-
-    def quemar(self):
-        self._estado = "quemado"
-
-
-class Papa(Ingrediente):
-    def __init__(self):
-        super().__init__("Papa")
-        self.estacion_requerida = "FREIDORA"
-
-    def freir(self):
-        self._preparar_recursivo(2)
+        self.nombre = nombre
+        self.estado = "Listo para entrega"
 
 
 class Receta:
-    TIEMPO_BASE = 60
-
-    def __init__(self, nombre: str, ingredientes: list):
+    def __init__(self, nombre: str, requisitos: dict):
         self._nombre = nombre
-        self._ingredientes = ingredientes
-        self._puntos_base = len(ingredientes) * 100
-        self._puntos = self._puntos_base
-        self._tiempo_max = self.TIEMPO_BASE + len(ingredientes) * 15
-        self._timer = 0
+        self._requisitos = requisitos 
 
     @property
-    def nombre(self):          return self._nombre
-    @property
-    def puntos_base(self):     return self._puntos_base
-    @property
-    def puntos_actuales(self): return self._puntos
-    @property
-    def ingredientes(self):    return self._ingredientes
+    def nombre(self): return self._nombre
 
-    def tick(self, seg: int = 1):
-        self._timer += seg
-        if self._timer >= self._tiempo_max:
-            self._puntos = max(0, self._puntos // 2)
-            self._timer = 0
+    def comparar_con_lista(self, lista_elementos) -> bool:
+        if len(lista_elementos) == 1 and isinstance(lista_elementos[0], Platillo):
+            return lista_elementos[0].nombre == self._nombre
 
-    def tiempo_restante(self) -> int:
-        return max(0, self._tiempo_max - self._timer)
-
-    def tiempo_fmt(self) -> str:
-        t = self.tiempo_restante()
-        return f"{t//60:02d}:{t%60:02d}"
-
-    def comparar(self, otra) -> bool:
-        a = sorted(i.nombre for i in self._ingredientes)
-        b = sorted(i.nombre for i in otra.ingredientes)
-        return a == b
+        if len(lista_elementos) != len(self._requisitos):
+            return False
+        
+        items_temp = list(lista_elementos)
+        for req_nombre, req_estado in self._requisitos.items():
+            encontrado = False
+            for ing in items_temp:
+                if not isinstance(ing, Platillo) and ing.nombre == req_nombre and ing.estado == req_estado:
+                    items_temp.remove(ing)
+                    encontrado = True
+                    break
+            if not encontrado:
+                return False
+        return True
 
     @staticmethod
     def crear(nombre: str):
         catalogo = {
-            "Hamburguesa":  lambda: Receta("Hamburguesa",  [Proteina("Carne"), Pan("Pan"), Vegetal("Lechuga")]),
-            "Ensalada":     lambda: Receta("Ensalada",     [Vegetal("Lechuga"), Vegetal("Tomate")]),
-            "Papas Fritas": lambda: Receta("Papas Fritas", [Papa(), Papa()]),
-            "Wrap":         lambda: Receta("Wrap",         [Pan("Tortilla"), Proteina("Pollo"), Vegetal("Lechuga")]),
+            "Papas Fritas":     lambda: Receta("Papas Fritas",     {"Papa": "frito"}),
+            "Hamburguesa":      lambda: Receta("Hamburguesa",      {"Pan": "listo", "Tomate": "picado", "Lechuga": "picado"}),
+            "Pollo Frito":      lambda: Receta("Pollo Frito",      {"Pollo": "frito"}),
+            "Sopa":             lambda: Receta("Sopa",             {"Tomate": "picado", "Papa": "picado", "Agua": "cocinado"}),
+            "Ensalada":         lambda: Receta("Ensalada",         {"Tomate": "picado", "Lechuga": "picado"}),
+            "Casado":           lambda: Receta("Casado",           {"Arroz": "cocinado", "Chuleta": "cocinado", "Tomate": "picado"}),
+            "Sushi":            lambda: Receta("Sushi",            {"Arroz": "cocinado", "Pescado": "cocinado"}),
+            "Sopa de Pescado":  lambda: Receta("Sopa de Pescado",  {"Tomate": "picado", "Papa": "picado", "Agua": "cocinado", "Pescado": "cocinado"}),
+            "Chopsuy":          lambda: Receta("Chopsuy",          {"Pasta": "cocinado", "Tomate": "picado"}),
         }
-        return catalogo.get(nombre, catalogo["Ensalada"])()
+        return catalogo.get(nombre, lambda: Receta("Ensalada", {"Tomate": "picado", "Lechuga": "picado"}))()
 
 
 class Chef:
@@ -276,16 +283,16 @@ class Chef:
     def activar(self):    self.__activo = True
     def desactivar(self): self.__activo = False
 
-    def tomar(self, ing) -> bool:
+    def tomar(self, item) -> bool:
         if self.__mano is None:
-            self.__mano = ing
+            self.__mano = item
             return True
         return False
 
     def soltar(self):
-        ing = self.__mano
+        item = self.__mano
         self.__mano = None
-        return ing
+        return item
 
     def mover(self, dir: str, mapa: list) -> bool:
         self.__direccion = dir
@@ -305,21 +312,29 @@ class Chef:
 
 
 class Cocina:
-    RECETAS_ESC     = {1: ["Hamburguesa","Ensalada","Papas Fritas","Wrap"]}
-    TIEMPO_TOTAL    = {1: 180}
-    INTERVALO_NUEVA = {1: 25}
+    # NUEVO TIEMPO ACTUALIZADO: 2 Minutos (120 segundos)
+    TIEMPO_TOTAL    = 120 
+    INTERVALO_NUEVA = 25  
 
-    def __init__(self, escenario: int = 1):
-        self.__esc       = escenario
-        self.__mapa      = MAPA_ESC1
-        self.__chefs     = []
-        self.__ordenes   = []    
-        self.__historial = []    
-        self.__tiempo    = self.TIEMPO_TOTAL[escenario]
-        self.__t_receta  = 0
-        self.__puntos    = 0
-        self.__activa    = False
+    def __init__(self, id_escenario=1):
+        self.id_escenario = id_escenario
+        cfg = CONFIG_ESCENARIOS[id_escenario]
+        
+        self.__nombre_local = cfg["nombre_local"]
+        self.__recetas_pool = cfg["recetas"]
+        self.__mapa         = _parsear_mapa(cfg["mapa_raw"])
+        
+        self.__chefs              = []
+        self.__ordenes            = []    
+        self.__tiempo             = self.TIEMPO_TOTAL
+        self.__t_receta           = 0
+        self.__puntos             = 0      
+        self.__pedidos_entregados = 0      
+        self.__activa             = False
+        self.__mesas_items        = {}
 
+    @property
+    def nombre_local(self): return self.__nombre_local
     @property
     def mapa(self):    return self.__mapa
     @property
@@ -331,7 +346,11 @@ class Cocina:
     @property
     def puntos(self):  return self.__puntos
     @property
+    def pedidos_entregados(self): return self.__pedidos_entregados
+    @property
     def activa(self):  return self.__activa
+    @property
+    def mesas_items(self): return self.__mesas_items
 
     def tipo(self, f, c): return self.__mapa[f][c]
 
@@ -340,28 +359,31 @@ class Cocina:
             self.__chefs.append(chef)
 
     def generar_receta(self):
-        nombre = random.choice(self.RECETAS_ESC[self.__esc])
+        nombre = random.choice(self.__recetas_pool)
         r = Receta.crear(nombre)
         self.__ordenes.append(r)       
         return r
 
-    def entregar_orden(self):
-        if self.__ordenes:
-            r = self.__ordenes.pop(0)  
-            self.__puntos += r.puntos_actuales
-            self._push_historial(("entrega", r.nombre, r.puntos_actuales))
-            return r
-        return None
-
-    def _push_historial(self, accion):
-        self.__historial.append(accion)   
-
-    def ver_ultimo_historial(self):
-        return self.__historial[-1] if self.__historial else None
+    def procesar_entrega(self, lista_elementos) -> tuple:
+        if not self.__ordenes:
+            return False, "No hay órdenes pendientes."
+        
+        for i, receta in enumerate(self.__ordenes):
+            if receta.comparar_con_lista(lista_elementos):
+                self.__ordenes.pop(i)
+                self.__puntos += 100
+                self.__pedidos_entregados += 1
+                
+                if len(self.__ordenes) == 0:
+                    self.generar_receta()
+                
+                return True, f"¡Éxito! Entregado [{receta.nombre}] +100 pts"
+        
+        return False, "Los ingredientes no corresponden a ninguna orden activa."
 
     def iniciar(self):
         self.__activa = True
-        self.generar_receta()
+        self.generar_receta()  
 
     def tick(self):
         if not self.__activa:
@@ -369,36 +391,38 @@ class Cocina:
         self.__tiempo  -= 1
         self.__t_receta += 1
 
-        if self.__t_receta >= self.INTERVALO_NUEVA[self.__esc]:
+        if self.__t_receta >= self.INTERVALO_NUEVA:
             self.generar_receta()
             self.__t_receta = 0
-
-        for r in list(self.__ordenes):
-            r.tick(1)
-            if r.puntos_actuales <= 0:
-                self.__puntos = max(0, self.__puntos - r.puntos_base)
-                self.__ordenes.remove(r)
 
         if self.__tiempo <= 0:
             self.__tiempo = 0
             self.__activa = False
+            HISTORIAL_PUNTOS[self.id_escenario] = self.__puntos
+            HISTORIAL_ENTREGAS[self.id_escenario] = self.__pedidos_entregados
 
     def tiempo_fmt(self):
         m, s = self.__tiempo // 60, self.__tiempo % 60
         return f"{m:02d}:{s:02d}"
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  INTERFAZ GRÁFICA DEL JUEGO
+# ══════════════════════════════════════════════════════════════════════
+
 class VistaJuego:
     COLOR_GRID = "#111111"
     COLOR_HUD  = "#181818"
 
-    def __init__(self, padre: tk.Misc, escenario: int = 1):
+    def __init__(self, padre: tk.Misc, id_escenario=1):
+        self.__padre = padre
+        self.__id_escenario = id_escenario
         self.__win = tk.Toplevel(padre)
-        self.__win.title("Crazy Snack Rush TEC")
+        self.__win.title(f"Crazy Snack Rush TEC - Nivel {id_escenario}")
         self.__win.resizable(False, False)
         self.__win.grab_set()
 
-        self.__cocina = Cocina(escenario)
+        self.__cocina = Cocina(id_escenario)
 
         self.__canvas = tk.Canvas(
             self.__win,
@@ -407,29 +431,7 @@ class VistaJuego:
         )
         self.__canvas.pack()
 
-        self.__img_celda = {}
-        for tipo, ruta in IMAGEN_CELDA.items():
-            if ruta and os.path.exists(ruta):
-                try:
-                    img = Image.open(ruta).resize((T, T), Image.Resampling.LANCZOS)
-                    self.__img_celda[tipo] = ImageTk.PhotoImage(img)
-                except Exception:
-                    self.__img_celda[tipo] = None
-            else:
-                self.__img_celda[tipo] = None
-
-        self.__img_chef = [None, None]
-        for i, ruta in enumerate([IMAGEN_CHEF_1, IMAGEN_CHEF_2]):
-            if ruta and os.path.exists(ruta):
-                try:
-                    img = Image.open(ruta).resize((T, T), Image.Resampling.LANCZOS)
-                    self.__img_chef[i] = ImageTk.PhotoImage(img)
-                except Exception:
-                    pass
-
-        suelos = [(f, c)
-                  for f in range(FILAS) for c in range(COLS)
-                  if self.__cocina.mapa[f][c] == "SUELO"]
+        suelos = [(f, c) for f in range(FILAS) for c in range(COLS) if self.__cocina.mapa[f][c] == "SUELO"]
         s1 = suelos[0]  if suelos          else (5, 1)
         s2 = suelos[-1] if len(suelos) > 1 else (5, 2)
 
@@ -460,13 +462,15 @@ class VistaJuego:
 
     def _msg(self, texto: str):
         self.__msg       = texto
-        self.__msg_ticks = 2
+        self.__msg_ticks = 3
 
     def _mover(self, dir: str):
+        if not self.__cocina.activa: return
         self._activo().mover(dir, self.__cocina.mapa)
         self._dibujar()
 
     def _cambiar_chef(self, event=None):
+        if not self.__cocina.activa: return "break"
         self._activo().desactivar()
         self.__idx_activo = 1 - self.__idx_activo
         self._activo().activar()
@@ -475,72 +479,135 @@ class VistaJuego:
         return "break"   
 
     def _interactuar(self):
+        if not self.__cocina.activa: return
         chef = self._activo()
         ff, fc = chef.celda_frente()
         if not (0 <= ff < FILAS and 0 <= fc < COLS):
             return
         tipo = self.__cocina.tipo(ff, fc)
-        self._msg(self._accion(chef, tipo))
+        self._msg(self._accion(chef, ff, fc, tipo))
         self._dibujar()
 
-    def _accion(self, chef: Chef, tipo: str) -> str:
+    def _verificar_ensamblado_automatico(self, lista_mesa):
+        for nombre_platillo in ["Hamburguesa", "Sopa", "Ensalada", "Casado", "Sushi", "Sopa de Pescado", "Chopsuy"]:
+            receta = Receta.crear(nombre_platillo)
+            if receta.comparar_con_lista(lista_mesa):
+                lista_mesa.clear()
+                lista_mesa.append(Platillo(nombre_platillo))
+                return True, nombre_platillo
+        return False, ""
 
+    def _accion(self, chef: Chef, f: int, c: int, tipo: str) -> str:
         if tipo.startswith("DESPENSA_"):
             if chef.mano:
-                return f"{chef.nombre} ya lleva {chef.mano.nombre}. Suéltalo primero."
+                return f"{chef.nombre} ya lleva {chef.mano.nombre}."
             num = int(tipo.split("_")[1])
             ing = _ingrediente_despensa(num)
             if ing is None:
-                return f"Despensa {num} sin ingrediente asignado."
+                return f"Despensa {num} vacía."
             chef.tomar(ing)
-            return f"{chef.nombre} tomó {ing.nombre}."
+            return f"{chef.nombre} tomó {ing.nombre} ({ing.estado})."
+
+        if tipo == "MESA":
+            pos = (f, c)
+            if pos not in self.__cocina.mesas_items:
+                self.__cocina.mesas_items[pos] = []
+
+            lista_mesa = self.__cocina.mesas_items[pos]
+
+            if chef.mano:
+                if isinstance(chef.mano, Platillo):
+                    item_mano = chef.soltar()
+                    lista_mesa.append(item_mano)
+                    return f"Dejaste {item_mano.nombre} en la mesa."
+
+                if chef.mano.nombre in ["Tomate", "Lechuga", "Papa"] and chef.mano.estado == "crudo":
+                    return f"¡No puedes dejar {chef.mano.nombre} sin picar!"
+                
+                ing_mano = chef.soltar()
+                lista_mesa.append(ing_mano)
+                
+                exito, nombre_p = self._verificar_ensamblado_automatico(lista_mesa)
+                if exito:
+                    return f"¡Combinación Perfecta! Armaste: {nombre_p} 🎉"
+
+                nombres = "+".join(f"{i.nombre}({i.estado})" for i in lista_mesa)
+                return f"En mesa: {nombres}"
+            else:
+                if lista_mesa:
+                    item_tomado = lista_mesa.pop()
+                    chef.tomar(item_tomado)
+                    return f"Recogiste {item_tomado.nombre}."
+                return "Mesa vacía."
 
         if tipo == "TABLA":
-            if chef.mano is None:
-                return "No llevas ningún ingrediente."
-            if isinstance(chef.mano, Vegetal):
-                chef.mano.cortar()
-                return f"{chef.nombre} picó {chef.mano.nombre}. ✓ Listo."
-            return f"{chef.mano.nombre} no se puede picar aquí."
+            if chef.mano is None: return "No llevas nada."
+            if isinstance(chef.mano, Platillo): return "¡Ya es un platillo!"
+            if chef.mano.nombre in ["Tomate", "Lechuga", "Papa"]:
+                if chef.mano.estado == "crudo":
+                    chef.mano.cortar()
+                    return f"{chef.mano.nombre} picado ✓"
+                return f"{chef.mano.nombre} ya está picado."
+            return f"{chef.mano.nombre} no se pica."
 
         if tipo == "COCINA":
-            if chef.mano is None:
-                return "No llevas ningún ingrediente."
-            if isinstance(chef.mano, Proteina):
-                chef.mano.cocinar()
-                return f"{chef.nombre} cocinó {chef.mano.nombre}. ✓ Listo."
-            return f"{chef.mano.nombre} no va en la cocina (solo carnes)."
+            if chef.mano is None: return "No llevas nada."
+            if isinstance(chef.mano, Platillo): return "¡Ya está terminado!"
+            if chef.mano.nombre in ["Agua", "Arroz", "Chuleta", "Pollo", "Pasta", "Pescado"]:
+                if chef.mano.estado == "crudo":
+                    chef.mano.cocinar()
+                    if chef.mano.nombre == "Pollo":
+                        chef.soltar()
+                        chef.tomar(Platillo("Pollo Frito"))
+                    return f"{chef.mano.nombre} cocinado con éxito ✓"
+                return f"{chef.mano.nombre} ya se cocinó."
+            return "Eso no se cocina aquí."
 
         if tipo == "FREIDORA":
-            if chef.mano is None:
-                return "No llevas ningún ingrediente."
-            if isinstance(chef.mano, Papa):
-                chef.mano.freir()
-                return f"{chef.nombre} frió {chef.mano.nombre}. ✓ Listo."
-            return f"{chef.mano.nombre} no va en la freidora (solo papas)."
+            if chef.mano is None: return "No llevas nada."
+            if chef.mano.nombre == "Papa":
+                if chef.mano.estado == "picado":
+                    chef.mano.freir()
+                    chef.soltar()
+                    chef.tomar(Platillo("Papas Fritas"))
+                    return "Papas fritas listas ✓"
+                return "¡Picalas antes de freír!"
+            return "Solo se fríen papas aquí."
 
         if tipo == "ENTREGA":
-            r = self.__cocina.entregar_orden()
-            if r:
-                return f"¡Entregado! +{r.puntos_actuales} pts  [{r.nombre}]"
-            return "No hay órdenes en cola."
+            ingredientes_a_entregar = []
+            fuente = ""
+            if chef.mano:
+                ingredientes_a_entregar = [chef.mano]
+                fuente = "mano"
+            else:
+                frente_f, frente_c = chef.celda_frente()
+                mesas_adyacentes = [(frente_f, frente_c), (chef.fila, chef.col)]
+                for pos_mesa in mesas_adyacentes:
+                    if pos_mesa in self.__cocina.mesas_items and self.__cocina.mesas_items[pos_mesa]:
+                        ingredientes_a_entregar = self.__cocina.mesas_items[pos_mesa]
+                        fuente = pos_mesa
+                        break
+
+            if not ingredientes_a_entregar: return "No tienes comida para entregar."
+            exito, mensaje = self.__cocina.procesar_entrega(ingredientes_a_entregar)
+            if exito:
+                if fuente == "mano": chef.soltar() 
+                else: self.__cocina.mesas_items[fuente] = [] 
+            return mensaje
 
         if tipo == "BASURERO":
             if chef.mano:
                 nombre = chef.mano.nombre
                 chef.soltar()
-                return f"{chef.nombre} tiró {nombre} al basurero."
+                return f"Tiraste {nombre}."
             return "No llevas nada."
-
-        if tipo == "MESA":
-            return f"{chef.nombre} interactuó con la mesa."
 
         return f"'{tipo}' sin acción."
 
     def _loop(self):
         self.__cocina.tick()
-        if self.__msg_ticks > 0:
-            self.__msg_ticks -= 1
+        if self.__msg_ticks > 0: self.__msg_ticks -= 1
         self._dibujar()
         if self.__cocina.activa:
             self.__win.after(1000, self._loop)
@@ -557,150 +624,141 @@ class VistaJuego:
 
     def _d_hud(self):
         cv = self.__canvas
-        cv.create_rectangle(0, 0, ANCHO_CANVAS, HUD_H,
-                             fill=self.COLOR_HUD, outline="")
+        cv.create_rectangle(0, 0, ANCHO_CANVAS, HUD_H, fill=self.COLOR_HUD, outline="")
 
-        cv.create_text(ANCHO_CANVAS//2, 26,
-                       text=f"⏱  {self.__cocina.tiempo_fmt()}",
-                       font=("Arial", 22, "bold"), fill="#FFD600")
-
-        cv.create_text(ANCHO_CANVAS - 10, 26,
-                       text=f"★ {self.__cocina.puntos}",
-                       font=("Arial", 14, "bold"), fill="white", anchor="e")
+        cv.create_text(ANCHO_CANVAS//2, 16, text=self.__cocina.nombre_local, font=("Arial", 11, "bold"), fill="#FFD600")
+        cv.create_text(ANCHO_CANVAS//2, 38, text=f"⏱  {self.__cocina.tiempo_fmt()}", font=("Arial", 20, "bold"), fill="white")
+        
+        cv.create_text(ANCHO_CANVAS - 10, 26, text=f"★ {self.__cocina.puntos}", font=("Arial", 14, "bold"), fill="white", anchor="e")
 
         ch = self._activo()
-        cv.create_text(10, 26,
-                       text=f"▶ {ch.nombre}",
-                       font=("Arial", 13, "bold"), fill=ch.color, anchor="w")
-
+        cv.create_text(10, 26, text=f"▶ {ch.nombre}", font=("Arial", 13, "bold"), fill=ch.color, anchor="w")
         if ch.mano:
-            cv.create_text(10, 50,
-                           text=f"Mano: {ch.mano.nombre} [{ch.mano.estado}]",
-                           font=("Arial", 10), fill="#FFD600", anchor="w")
+            txt_estado = ch.mano.estado if isinstance(ch.mano, Platillo) else f"[{ch.mano.estado}]"
+            cv.create_text(10, 50, text=f"Mano: {ch.mano.nombre} {txt_estado}", font=("Arial", 10), fill="#FFD600", anchor="w")
 
         ords = self.__cocina.ordenes
         if ords:
-            txt = "  |  ".join(f"{r.nombre} {r.tiempo_fmt()}" for r in ords[:4])
+            txt = "PEDIDOS PENDIENTES: " + "  |  ".join(r.nombre for r in ords)
         else:
             txt = "Sin órdenes activas"
-        cv.create_text(ANCHO_CANVAS//2, 62,
-                       text=txt, font=("Arial", 9), fill="#FFC880")
-
-        cv.create_line(0, HUD_H, ANCHO_CANVAS, HUD_H,
-                       fill="#333333", width=2)
+        cv.create_text(ANCHO_CANVAS//2, 64, text=txt, font=("Arial", 10, "bold"), fill="#FFC880")
+        cv.create_line(0, HUD_H, ANCHO_CANVAS, HUD_H, fill="#333333", width=2)
 
     def _d_celdas(self):
         for f in range(FILAS):
             for c in range(COLS):
                 tipo = self.__cocina.mapa[f][c]
                 x0, y0 = c * T, f * T + HUD_H
-
-                img = self.__img_celda.get(tipo)
-                if img:
-                    self.__canvas.create_image(x0, y0, image=img, anchor="nw")
+                color = COLOR_CELDA.get(tipo, "#444444")
+                self.__canvas.create_rectangle(x0, y0, x0+T, y0+T, fill=color, outline="")
+                
+                if tipo == "MESA" and (f, c) in self.__cocina.mesas_items and self.__cocina.mesas_items[(f, c)]:
+                    items = self.__cocina.mesas_items[(f, c)]
+                    etq = "+".join(i.nombre[0:3] for i in items)
                 else:
-                    color = COLOR_CELDA.get(tipo, "#444444")
-                    self.__canvas.create_rectangle(
-                        x0, y0, x0+T, y0+T,
-                        fill=color, outline=""
-                    )
                     etq = ETIQUETA_CELDA.get(tipo)
-                    if etq:
-                        self.__canvas.create_text(
-                            x0 + T//2, y0 + T//2,
-                            text=etq, font=("Arial", 9, "bold"),
-                            fill="#000000"
-                        )
+
+                if etq:
+                    self.__canvas.create_text(x0 + T//2, y0 + T//2, text=etq, font=("Arial", 8, "bold"), fill="#000000")
 
     def _d_grid(self):
         for c in range(COLS + 1):
-            x = c * T
-            self.__canvas.create_line(x, HUD_H, x, ALTO_CANVAS,
-                                      fill=self.COLOR_GRID, width=1)
+            self.__canvas.create_line(c * T, HUD_H, c * T, ALTO_CANVAS, fill=self.COLOR_GRID, width=1)
         for f in range(FILAS + 1):
-            y = f * T + HUD_H
-            self.__canvas.create_line(0, y, ANCHO_CANVAS, y,
-                                      fill=self.COLOR_GRID, width=1)
+            self.__canvas.create_line(0, f * T + HUD_H, ANCHO_CANVAS, f * T + HUD_H, fill=self.COLOR_GRID, width=1)
 
     def _d_chefs(self):
         R = T // 2 - 4
-
         for i, chef in enumerate(self.__cocina.chefs):
-            x0 = chef.col * T + 4
-            y0 = chef.fila * T + HUD_H + 4
-            x1 = x0 + T - 8
-            y1 = y0 + T - 8
-
-            img = self.__img_chef[i]
-            if img:
-                self.__canvas.create_image(
-                    chef.col * T, chef.fila * T + HUD_H,
-                    image=img, anchor="nw"
-                )
-            else:
-                borde  = "#FFD600" if chef.activo else "#000000"
-                grosor = 3         if chef.activo else 1
-                
-                self.__canvas.create_rectangle(
-                    x0, y0, x1, y1,
-                    fill=chef.color, outline=borde, width=grosor
-                )
-                
-                cx = chef.col  * T + T // 2
-                cy = chef.fila * T + T // 2 + HUD_H
-                self.__canvas.create_text(
-                    cx, cy,
-                    text=str(i + 1),   
-                    font=("Arial", 14, "bold"), fill="white"
-                )
-
+            x0, y0 = chef.col * T + 4, chef.fila * T + HUD_H + 4
+            x1, y1 = x0 + T - 8, y0 + T - 8
+            borde  = "#FFD600" if chef.activo else "#000000"
+            grosor = 3         if chef.activo else 1
+            
+            self.__canvas.create_rectangle(x0, y0, x1, y1, fill=chef.color, outline=borde, width=grosor)
             cx = chef.col  * T + T // 2
             cy = chef.fila * T + T // 2 + HUD_H
+            self.__canvas.create_text(cx, cy, text=str(i + 1), font=("Arial", 14, "bold"), fill="white")
+
             d = {
                 "arriba":    [cx, cy-R-6, cx-5, cy-R, cx+5, cy-R],
                 "abajo":     [cx, cy+R+6, cx-5, cy+R, cx+5, cy+R],
                 "izquierda": [cx-R-6, cy, cx-R, cy-5, cx-R, cy+5],
                 "derecha":   [cx+R+6, cy, cx+R, cy-5, cx+R, cy+5],
             }.get(chef.direccion)
-            if d:
-                self.__canvas.create_polygon(d, fill=chef.color, outline="")
+            if d: self.__canvas.create_polygon(d, fill=chef.color, outline="")
 
             if chef.mano:
-                self.__canvas.create_oval(
-                    cx+R-7, cy-R-3, cx+R+7, cy-R+11,
-                    fill="#FF9800", outline="white", width=1
-                )
-                self.__canvas.create_text(
-                    cx+R, cy-R+4,
-                    text=chef.mano.nombre[0],
-                    font=("Arial", 7, "bold"), fill="white"
-                )
+                self.__canvas.create_oval(cx+R-7, cy-R-3, cx+R+7, cy-R+11, fill="#FF9800", outline="white", width=1)
+                self.__canvas.create_text(cx+R, cy-R+4, text=chef.mano.nombre[0], font=("Arial", 7, "bold"), fill="white")
 
     def _d_mensaje(self):
         if self.__msg_ticks > 0 and self.__msg:
             mx, my = ANCHO_CANVAS // 2, HUD_H + 28
-            w = min(len(self.__msg) * 7 + 20, ANCHO_CANVAS - 20)
-            self.__canvas.create_rectangle(
-                mx-w//2, my-13, mx+w//2, my+13,
-                fill="#1A1A1A", outline="#FFD600", width=1
-            )
-            self.__canvas.create_text(
-                mx, my, text=self.__msg,
-                font=("Arial", 11, "bold"), fill="#FFD600"
-            )
+            w = min(len(self.__msg) * 7 + 40, ANCHO_CANVAS - 20)
+            self.__canvas.create_rectangle(mx-w//2, my-13, mx+w//2, my+13, fill="#1A1A1A", outline="#FFD600", width=1)
+            self.__canvas.create_text(mx, my, text=self.__msg, font=("Arial", 11, "bold"), fill="#FFD600")
 
     def _pantalla_fin(self):
-        mx, my = ANCHO_CANVAS // 2, ALTO_CANVAS // 2
-        self.__canvas.create_rectangle(
-            mx-200, my-70, mx+200, my+70,
-            fill="#1A1A1A", outline="#FFD600", width=3
+        self.__canvas.unbind("<KeyPress-Up>")
+        self.__canvas.unbind("<KeyPress-Down>")
+        self.__canvas.unbind("<KeyPress-Left>")
+        self.__canvas.unbind("<KeyPress-Right>")
+        self.__canvas.unbind("<Tab>")
+
+        fin_win = tk.Toplevel(self.__win)
+        fin_win.title("Marcador Global de Locales")
+        fin_win.geometry("400x380")
+        fin_win.resizable(False, False)
+        fin_win.configure(bg="#1A1A1A")
+        fin_win.transient(self.__win)
+        fin_win.grab_set()
+
+        tk.Label(fin_win, text="¡FIN DEL TURNO!", font=("Arial", 16, "bold"), fg="#FFD600", bg="#1A1A1A").pack(pady=10)
+        
+        f_mc = tk.LabelFrame(fin_win, text=" McDonald's ", font=("Arial", 10, "bold"), fg="white", bg="#262626", bd=1, relief="groove")
+        f_mc.pack(fill="x", padx=20, pady=5)
+        tk.Label(f_mc, text=f"Puntos: {HISTORIAL_PUNTOS[1]}   |   Entregas: {HISTORIAL_ENTREGAS[1]}", font=("Arial", 11), fg="#FFEB3B", bg="#262626").pack(pady=4)
+
+        f_soda = tk.LabelFrame(fin_win, text=" La Soda ", font=("Arial", 10, "bold"), fg="white", bg="#262626", bd=1, relief="groove")
+        f_soda.pack(fill="x", padx=20, pady=5)
+        tk.Label(f_soda, text=f"Puntos: {HISTORIAL_PUNTOS[2]}   |   Entregas: {HISTORIAL_ENTREGAS[2]}", font=("Arial", 11), fg="#4CAF50", bg="#262626").pack(pady=4)
+
+        f_hk = tk.LabelFrame(fin_win, text=" Hong Kong ", font=("Arial", 10, "bold"), fg="white", bg="#262626", bd=1, relief="groove")
+        f_hk.pack(fill="x", padx=20, pady=5)
+        tk.Label(f_hk, text=f"Puntos: {HISTORIAL_PUNTOS[3]}   |   Entregas: {HISTORIAL_ENTREGAS[3]}", font=("Arial", 11), fg="#00BCD4", bg="#262626").pack(pady=4)
+
+        def avanzar():
+            fin_win.destroy()
+            self.__win.destroy()
+            
+            if self.__id_escenario == 1:
+                VistaJuego(self.__padre, id_escenario=2)
+            elif self.__id_escenario == 2:
+                VistaJuego(self.__padre, id_escenario=3)
+            elif self.__id_escenario == 3:
+                total_pts = int(HISTORIAL_PUNTOS[1]) + int(HISTORIAL_PUNTOS[2]) + int(HISTORIAL_PUNTOS[3])
+                total_ent = int(HISTORIAL_ENTREGAS[1]) + int(HISTORIAL_ENTREGAS[2]) + int(HISTORIAL_ENTREGAS[3])
+                
+                res_win = tk.Toplevel(self.__padre)
+                res_win.title("🏆 Victoria Absoluta 🏆")
+                res_win.geometry("320x220")
+                res_win.configure(bg="#2E0854")
+                res_win.grab_set()
+                
+                tk.Label(res_win, text="SUMA TOTAL DE JUEGO", font=("Arial", 14, "bold"), fg="#FFD600", bg="#2E0854").pack(pady=15)
+                tk.Label(res_win, text=f"Puntos Totales: {total_pts} pts", font=("Arial", 12, "bold"), fg="white", bg="#2E0854").pack(pady=5)
+                tk.Label(res_win, text=f"Entregas Totales: {total_ent}", font=("Arial", 12, "bold"), fg="#80FFF0", bg="#2E0854").pack(pady=5)
+                
+                tk.Button(res_win, text="FINALIZAR", font=("Arial", 10, "bold"), bg="#FFD600", command=res_win.destroy).pack(pady=20)
+
+        btn_siguiente = tk.Button(
+            fin_win, text="SIGUIENTE", font=("Arial", 11, "bold"),
+            fg="black", bg="#FFD600", activebackground="#CCA600",
+            bd=0, relief="flat", padx=25, pady=8, command=avanzar
         )
-        self.__canvas.create_text(mx, my-30,
-                                   text="¡TIEMPO AGOTADO!",
-                                   font=("Arial", 26, "bold"), fill="#FFD600")
-        self.__canvas.create_text(mx, my+15,
-                                   text=f"Puntuación final: {self.__cocina.puntos} pts",
-                                   font=("Arial", 17), fill="white")
+        btn_siguiente.pack(pady=20)
 
 
 def abrir_about(padre: tk.Tk):
@@ -712,9 +770,7 @@ def abrir_about(padre: tk.Tk):
     v.transient(padre)
     v.grab_set()
 
-    tk.Label(v, text="Crazy Snack Rush TEC",
-             font=("Arial", 20, "bold"), fg="#5F3A22", bg="#FFF8EA").pack(pady=18)
-
+    tk.Label(v, text="Crazy Snack Rush TEC", font=("Arial", 20, "bold"), fg="#5F3A22", bg="#FFF8EA").pack(pady=18)
     texto = (
         "¡Bienvenido a la versión didáctica!\n\n"
         "Gestiona la cocina, prepara platillos\n"
@@ -723,17 +779,17 @@ def abrir_about(padre: tk.Tk):
         "─── Controles ───\n"
         "↑ ↓ ← →    Mover chef activo\n"
         "Tab           Cambiar de chef\n"
-        "Q              Interactuar con estación"
+        "Q              Interactuar con estación\n\n"
+        "🍟 Locales Disponibles:\n"
+        "1. McDonald's  |  2. La Soda  |  3. Hong Kong"
     )
-    tk.Label(v, text=texto, font=("Arial", 11), fg="#7D5A44",
-             bg="#FFF8EA", justify="center", wraplength=320).pack(pady=8)
-
-    tk.Button(v, text="CERRAR", command=v.destroy,
-              font=("Arial", 12, "bold"), fg="white", bg="#D96A43",
-              activebackground="#B85332", activeforeground="white",
-              bd=0, relief="flat", padx=20, pady=8).pack(side="bottom", pady=28)
+    tk.Label(v, text=texto, font=("Arial", 11), fg="#7D5A44", bg="#FFF8EA", justify="center").pack(pady=8)
+    tk.Button(v, text="CERRAR", command=v.destroy, font=("Arial", 12, "bold"), fg="white", bg="#D96A43", bd=0, relief="flat", padx=20, pady=8).pack(side="bottom", pady=28)
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  VENTANA PRINCIPAL / MENÚ DE INICIO ORIGINAL (¡CON TU FONDO!)
+# ══════════════════════════════════════════════════════════════════════
 directorio_actual = os.path.dirname(os.path.abspath(__file__))
 ruta_fondo = os.path.join(directorio_actual, "Imagenes", "Fondo.png")
 
@@ -745,8 +801,7 @@ ventana.title("Crazy Snack Rush TEC")
 ventana.geometry(f"{ANCHO_INI}x{ALTO_INI}")
 ventana.resizable(False, False)
 
-canvas_ini = tk.Canvas(ventana, width=ANCHO_INI, height=ALTO_INI,
-                        highlightthickness=0)
+canvas_ini = tk.Canvas(ventana, width=ANCHO_INI, height=ALTO_INI, highlightthickness=0)
 canvas_ini.pack(fill="both", expand=True)
 
 if os.path.exists(ruta_fondo):
@@ -755,9 +810,7 @@ if os.path.exists(ruta_fondo):
     canvas_ini.create_image(0, 0, image=_img_fondo, anchor="nw")
 else:
     canvas_ini.configure(bg="#2B1B11")
-    canvas_ini.create_text(ANCHO_INI//2, 180,
-                            text="Crazy Snack Rush TEC",
-                            font=("Arial", 26, "bold"), fill="white")
+    canvas_ini.create_text(ANCHO_INI//2, 180, text="Crazy Snack Rush TEC", font=("Arial", 26, "bold"), fill="white")
     _img_fondo = None
 
 def _set_color(item_id, color):
@@ -774,18 +827,13 @@ for _b in _botones:
     _fnt = ("Arial", 24, "bold")
     _sombras = []
     for _dx, _dy in [(-2,-2),(-2,2),(2,-2),(2,2)]:
-        _sid = canvas_ini.create_text(_x+_dx, _y+_dy,
-                                       text=_b["texto"], font=_fnt, fill="black")
+        _sid = canvas_ini.create_text(_x+_dx, _y+_dy, text=_b["texto"], font=_fnt, fill="black")
         _sombras.append(_sid)
-    _tid = canvas_ini.create_text(_x, _y, text=_b["texto"],
-                                   font=_fnt, fill="white")
+    _tid = canvas_ini.create_text(_x, _y, text=_b["texto"], font=_fnt, fill="white")
     for _xid in _sombras + [_tid]:
-        canvas_ini.tag_bind(_xid, "<Button-1>",
-                             lambda e, c=_b["cmd"]: c())
-    canvas_ini.tag_bind(_tid, "<Enter>",
-                         lambda e, t=_tid: _set_color(t, "#b0b0b0"))
-    canvas_ini.tag_bind(_tid, "<Leave>",
-                         lambda e, t=_tid: _set_color(t, "white"))
+        canvas_ini.tag_bind(_xid, "<Button-1>", lambda e, c=_b["cmd"]: c())
+    canvas_ini.tag_bind(_tid, "<Enter>", lambda e, t=_tid: _set_color(t, "#b0b0b0"))
+    canvas_ini.tag_bind(_tid, "<Leave>", lambda e, t=_tid: _set_color(t, "white"))
     _y += 70
 
 ventana.mainloop()
