@@ -21,6 +21,33 @@ from PIL import Image, ImageTk
 import random
 
 # ══════════════════════════════════════════════════════════════════════
+#  RUTAS DE IMÁGENES
+# ══════════════════════════════════════════════════════════════════════
+directorio_actual = os.path.dirname(os.path.abspath(__file__))
+ruta_fondo = os.path.join(directorio_actual, "Imagenes", "Fondo.png")
+ruta_mesa  = os.path.join(directorio_actual, "Imagenes", "Mesa.png")
+ruta_tabla = os.path.join(directorio_actual, "Imagenes", "Tabla.png")
+
+# ── Rutas de imágenes de estaciones ──
+ruta_cocina    = os.path.join(directorio_actual, "Imagenes", "Cocina.png")
+ruta_freidora  = os.path.join(directorio_actual, "Imagenes", "Freidora.png")
+ruta_basurero  = os.path.join(directorio_actual, "Imagenes", "Basurero.png")
+
+# ── Rutas de imágenes de cada despensa (mismo orden que INGREDIENTES_MAESTROS) ──
+RUTAS_DESPENSA = {
+    0: os.path.join(directorio_actual, "Imagenes", "Papa.png"),
+    1: os.path.join(directorio_actual, "Imagenes", "Pan.png"),
+    2: os.path.join(directorio_actual, "Imagenes", "Tomate.png"),
+    3: os.path.join(directorio_actual, "Imagenes", "Lechuga.png"),
+    4: os.path.join(directorio_actual, "Imagenes", "Pollo.png"),
+    5: os.path.join(directorio_actual, "Imagenes", "Agua.png"),
+    6: os.path.join(directorio_actual, "Imagenes", "Chuleta.png"),
+    7: os.path.join(directorio_actual, "Imagenes", "Arroz.png"),
+    8: os.path.join(directorio_actual, "Imagenes", "Pasta.png"),
+    9: os.path.join(directorio_actual, "Imagenes", "Pescado.png"),
+}
+
+# ══════════════════════════════════════════════════════════════════════
 #  ESTRUCTURA DE MEMORIA GLOBAL (HISTORIAL ACUMULATIVO)
 # ══════════════════════════════════════════════════════════════════════
 HISTORIAL_PUNTOS = {
@@ -46,21 +73,29 @@ HUD_H  = 80
 ANCHO_CANVAS = COLS * T
 ALTO_CANVAS  = FILAS * T + HUD_H
 
+# ── Duración (en segundos) de cada acción que bloquea al chef ──
+DURACION_ACCION = {
+    "TABLA":    6,   # picar
+    "COCINA":   5,   # cocinar
+    "FREIDORA": 4,   # freír
+    # DESPENSA, MESA, ENTREGA y BASURERO son inmediatas (no bloquean)
+}
+
+# Intervalo del loop rápido (para animar la barra de progreso), en milisegundos
+INTERVALO_TICK_RAPIDO = 100
+
 IMAGEN_CELDA = {
-    "SUELO":       None,   
-    "PARED":       None,
-    "MESA":        None,
-    "ENTREGA":     None,
-    "BASURERO":    None,
-    "COCINA":      None,
-    "TABLA":       None,
-    "FREIDORA":    None,
+    "MESA":     None,
+    "TABLA":    None,
+    "COCINA":   None,
+    "FREIDORA": None,
+    "BASURERO": None,
     **{f"DESPENSA_{i}": None for i in range(10)}
 }
 
 COLOR_CELDA = {
-    "SUELO":      "#D6CCB4",   
-    "PARED":      "#3E2B1A",   
+    "SUELO":      "#DAAB76",   # Amarillo para el suelo plano
+    "PARED":      "#3D2A0B",   # Rojo para las paredes
     "MESA":       "#8B6530",   
     "ENTREGA":    "#3A8FD9",   
     "BASURERO":   "#555555",   
@@ -116,15 +151,15 @@ CONFIG_ESCENARIOS = {
         "recetas": ["Hamburguesa", "Papas Fritas", "Pollo Frito"],
         "mapa_raw": [
             "PPPPPPPPPPPPPP",
-            "P0 1 2 3 4MM M",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "PCTFB       EP",  
+            "P  FFPPPPCCCPP",  
+            "P0   MMMM   MP",  
+            "P1          MP",  
+            "P2           P",  
+            "P3   MMMM    E",  
+            "P4   MMMM    P",  
+            "P           MP",  
+            "B           BP",  
+            "PMTTTM   MCCPP",  
             "PPPPPPPPPPPPPP",
         ]
     },
@@ -133,33 +168,33 @@ CONFIG_ESCENARIOS = {
         "recetas": ["Sopa", "Ensalada", "Casado"],
         "mapa_raw": [
             "PPPPPPPPPPPPPP",
-            "P2 0 5 3 6 7MM",  
+            "PMM   FF   MMP",  
+            "P0           P",  
+            "P2  MM  MM   P",  
+            "P3  MM  MM   P",  
+            "P5  MC  CM   P",  
+            "P6  MT  TM   P",  
+            "P7  MM  MM   P",  
             "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "PCTFB       EP",  
-            "PPPPPPPPPPPPPP",
+            "PB          BP",  
+            "PPPPPPPEPPPPPP",
         ]
     },
     3: {
         "nombre_local": "HONG KONG",
         "recetas": ["Sushi", "Ensalada", "Sopa de Pescado", "Chopsuy"],
         "mapa_raw": [
-            "PPPPPPPPPPPPPP",
-            "P2 7 9 8 0 5MM",  
+            "PPB235789PPPPP",
             "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "P            P",  
-            "PCTFB       EP",  
-            "PPPPPPPPPPPPPP",
+            "P MMMMMMMM P P",  
+            "P          P P",  
+            "P MMCCMMMM P P",  
+            "P          P P",  
+            "P MMFFMMMM P P",  
+            "P          P P",  
+            "P MMTTMMMM P P",  
+            "P          P P",  
+            "PPPPPPPPPPBPEP",
         ]
     }
 }
@@ -265,6 +300,13 @@ class Chef:
         self.__mano      = None      
         self.__direccion = "abajo"
 
+        # ── Bloqueo por acción en curso (cocinar, picar, freír) ──
+        self.__ocupado          = False   # True mientras está haciendo una acción
+        self.__tiempo_accion    = 0.0     # cuánto dura la acción total (segundos)
+        self.__tiempo_restante  = 0.0     # cuánto le queda (segundos)
+        self.__accion_celda     = None    # (fila, col) de la estación donde está trabajando
+        self.__accion_tipo      = None    # "TABLA" | "COCINA" | "FREIDORA"
+
     @property
     def nombre(self):    return self.__nombre
     @property
@@ -279,6 +321,54 @@ class Chef:
     def mano(self):      return self.__mano
     @property
     def direccion(self): return self.__direccion
+
+    @property
+    def ocupado(self):         return self.__ocupado
+    @property
+    def tiempo_accion(self):   return self.__tiempo_accion
+    @property
+    def tiempo_restante(self): return self.__tiempo_restante
+    @property
+    def accion_celda(self):    return self.__accion_celda
+    @property
+    def accion_tipo(self):     return self.__accion_tipo
+
+    def progreso_accion(self) -> float:
+        """Retorna 0.0 a 1.0 — qué tan avanzada está la acción (para la barra)."""
+        if self.__tiempo_accion <= 0:
+            return 1.0
+        avance = (self.__tiempo_accion - self.__tiempo_restante) / self.__tiempo_accion
+        return max(0.0, min(1.0, avance))
+
+    def iniciar_accion(self, duracion: float, celda: tuple, tipo_estacion: str):
+        """Bloquea al chef durante 'duracion' segundos en la celda indicada."""
+        self.__ocupado         = True
+        self.__tiempo_accion   = duracion
+        self.__tiempo_restante = duracion
+        self.__accion_celda    = celda
+        self.__accion_tipo     = tipo_estacion
+
+    def avanzar_accion(self, dt: float) -> bool:
+        """
+        Descuenta tiempo de la acción en curso.
+        Retorna True si la acción TERMINÓ en este tick (para ejecutar su efecto).
+        """
+        if not self.__ocupado:
+            return False
+        self.__tiempo_restante -= dt
+        if self.__tiempo_restante <= 1e-6:   # tolerancia por error de punto flotante
+            self.__tiempo_restante = 0
+            self.__ocupado = False
+            return True
+        return False
+
+    def cancelar_accion(self):
+        """Libera al chef sin completar la acción (por si se necesita en el futuro)."""
+        self.__ocupado         = False
+        self.__tiempo_accion   = 0.0
+        self.__tiempo_restante = 0.0
+        self.__accion_celda    = None
+        self.__accion_tipo     = None
 
     def activar(self):    self.__activo = True
     def desactivar(self): self.__activo = False
@@ -295,6 +385,8 @@ class Chef:
         return item
 
     def mover(self, dir: str, mapa: list) -> bool:
+        if self.__ocupado:
+            return False   # no se puede mover mientras está cocinando/picando/friendo
         self.__direccion = dir
         d = {"arriba":(-1,0),"abajo":(1,0),"izquierda":(0,-1),"derecha":(0,1)}
         df, dc = d[dir]
@@ -312,7 +404,7 @@ class Chef:
 
 
 class Cocina:
-    # NUEVO TIEMPO ACTUALIZADO: 2 Minutos (120 segundos)
+    # ─── CONFIGURACIÓN DE TIEMPO ───
     TIEMPO_TOTAL    = 120 
     INTERVALO_NUEVA = 25  
 
@@ -411,7 +503,6 @@ class Cocina:
 # ══════════════════════════════════════════════════════════════════════
 
 class VistaJuego:
-    COLOR_GRID = "#111111"
     COLOR_HUD  = "#181818"
 
     def __init__(self, padre: tk.Misc, id_escenario=1):
@@ -423,6 +514,34 @@ class VistaJuego:
         self.__win.grab_set()
 
         self.__cocina = Cocina(id_escenario)
+
+        # Cargar imágenes de Mesa y Tabla si existen
+        if os.path.exists(ruta_mesa):
+            _pil_mesa = Image.open(ruta_mesa).resize((T, T), Image.Resampling.LANCZOS)
+            IMAGEN_CELDA["MESA"] = ImageTk.PhotoImage(_pil_mesa)
+            
+        if os.path.exists(ruta_tabla):
+            _pil_tabla = Image.open(ruta_tabla).resize((T, T), Image.Resampling.LANCZOS)
+            IMAGEN_CELDA["TABLA"] = ImageTk.PhotoImage(_pil_tabla)
+
+        # Cargar imágenes de Cocina, Freidora y Basurero si existen
+        if os.path.exists(ruta_cocina):
+            _pil_cocina = Image.open(ruta_cocina).resize((T, T), Image.Resampling.LANCZOS)
+            IMAGEN_CELDA["COCINA"] = ImageTk.PhotoImage(_pil_cocina)
+
+        if os.path.exists(ruta_freidora):
+            _pil_freidora = Image.open(ruta_freidora).resize((T, T), Image.Resampling.LANCZOS)
+            IMAGEN_CELDA["FREIDORA"] = ImageTk.PhotoImage(_pil_freidora)
+
+        if os.path.exists(ruta_basurero):
+            _pil_basurero = Image.open(ruta_basurero).resize((T, T), Image.Resampling.LANCZOS)
+            IMAGEN_CELDA["BASURERO"] = ImageTk.PhotoImage(_pil_basurero)
+
+        # Cargar imagen de cada despensa (0-9) si existe su archivo
+        for _num, _ruta_desp in RUTAS_DESPENSA.items():
+            if os.path.exists(_ruta_desp):
+                _pil_desp = Image.open(_ruta_desp).resize((T, T), Image.Resampling.LANCZOS)
+                IMAGEN_CELDA[f"DESPENSA_{_num}"] = ImageTk.PhotoImage(_pil_desp)
 
         self.__canvas = tk.Canvas(
             self.__win,
@@ -456,6 +575,7 @@ class VistaJuego:
 
         self.__cocina.iniciar()
         self._loop()
+        self._loop_rapido()
 
     def _activo(self) -> Chef:
         return self.__cocina.chefs[self.__idx_activo]
@@ -481,6 +601,8 @@ class VistaJuego:
     def _interactuar(self):
         if not self.__cocina.activa: return
         chef = self._activo()
+        if chef.ocupado:
+            return   # no puede iniciar otra acción mientras está ocupado
         ff, fc = chef.celda_frente()
         if not (0 <= ff < FILAS and 0 <= fc < COLS):
             return
@@ -545,8 +667,8 @@ class VistaJuego:
             if isinstance(chef.mano, Platillo): return "¡Ya es un platillo!"
             if chef.mano.nombre in ["Tomate", "Lechuga", "Papa"]:
                 if chef.mano.estado == "crudo":
-                    chef.mano.cortar()
-                    return f"{chef.mano.nombre} picado ✓"
+                    chef.iniciar_accion(DURACION_ACCION["TABLA"], (f, c), "TABLA")
+                    return f"{chef.nombre} está picando {chef.mano.nombre}..."
                 return f"{chef.mano.nombre} ya está picado."
             return f"{chef.mano.nombre} no se pica."
 
@@ -555,11 +677,8 @@ class VistaJuego:
             if isinstance(chef.mano, Platillo): return "¡Ya está terminado!"
             if chef.mano.nombre in ["Agua", "Arroz", "Chuleta", "Pollo", "Pasta", "Pescado"]:
                 if chef.mano.estado == "crudo":
-                    chef.mano.cocinar()
-                    if chef.mano.nombre == "Pollo":
-                        chef.soltar()
-                        chef.tomar(Platillo("Pollo Frito"))
-                    return f"{chef.mano.nombre} cocinado con éxito ✓"
+                    chef.iniciar_accion(DURACION_ACCION["COCINA"], (f, c), "COCINA")
+                    return f"{chef.nombre} está cocinando {chef.mano.nombre}..."
                 return f"{chef.mano.nombre} ya se cocinó."
             return "Eso no se cocina aquí."
 
@@ -567,10 +686,8 @@ class VistaJuego:
             if chef.mano is None: return "No llevas nada."
             if chef.mano.nombre == "Papa":
                 if chef.mano.estado == "picado":
-                    chef.mano.freir()
-                    chef.soltar()
-                    chef.tomar(Platillo("Papas Fritas"))
-                    return "Papas fritas listas ✓"
+                    chef.iniciar_accion(DURACION_ACCION["FREIDORA"], (f, c), "FREIDORA")
+                    return f"{chef.nombre} está friendo papas..."
                 return "¡Picalas antes de freír!"
             return "Solo se fríen papas aquí."
 
@@ -614,11 +731,53 @@ class VistaJuego:
         else:
             self._pantalla_fin()
 
+    def _loop_rapido(self):
+        """
+        Corre cada INTERVALO_TICK_RAPIDO ms (más rápido que el tick de 1 seg).
+        Avanza el progreso de cualquier chef ocupado y aplica el efecto
+        de la estación apenas el tiempo llegue a cero.
+        """
+        if self.__cocina.activa:
+            dt = INTERVALO_TICK_RAPIDO / 1000.0   # a segundos
+            for chef in self.__cocina.chefs:
+                if chef.ocupado:
+                    termino = chef.avanzar_accion(dt)
+                    if termino:
+                        msg = self._completar_accion(chef)
+                        self._msg(msg)
+            self._dibujar()
+            self.__win.after(INTERVALO_TICK_RAPIDO, self._loop_rapido)
+
+    def _completar_accion(self, chef: Chef) -> str:
+        """Se ejecuta justo cuando termina el tiempo de picar/cocinar/freír."""
+        tipo = chef.accion_tipo
+
+        if tipo == "TABLA":
+            chef.mano.cortar()
+            return f"{chef.mano.nombre} picado ✓"
+
+        if tipo == "COCINA":
+            nombre_previo = chef.mano.nombre
+            chef.mano.cocinar()
+            if nombre_previo == "Pollo":
+                chef.soltar()
+                chef.tomar(Platillo("Pollo Frito"))
+            return f"{nombre_previo} cocinado con éxito ✓"
+
+        if tipo == "FREIDORA":
+            chef.mano.freir()
+            chef.soltar()
+            chef.tomar(Platillo("Papas Fritas"))
+            return "Papas fritas listas ✓"
+
+        return ""
+
     def _dibujar(self):
         self.__canvas.delete("all")
         self._d_hud()
         self._d_celdas()
         self._d_grid()      
+        self._d_barras_progreso()
         self._d_chefs()
         self._d_mensaje()
 
@@ -633,7 +792,10 @@ class VistaJuego:
 
         ch = self._activo()
         cv.create_text(10, 26, text=f"▶ {ch.nombre}", font=("Arial", 13, "bold"), fill=ch.color, anchor="w")
-        if ch.mano:
+        if ch.ocupado:
+            cv.create_text(10, 50, text=f"⏳ Ocupado ({ch.accion_tipo})... ¡cambia con Tab!",
+                           font=("Arial", 9, "bold"), fill="#FF7043", anchor="w")
+        elif ch.mano:
             txt_estado = ch.mano.estado if isinstance(ch.mano, Platillo) else f"[{ch.mano.estado}]"
             cv.create_text(10, 50, text=f"Mano: {ch.mano.nombre} {txt_estado}", font=("Arial", 10), fill="#FFD600", anchor="w")
 
@@ -650,8 +812,14 @@ class VistaJuego:
             for c in range(COLS):
                 tipo = self.__cocina.mapa[f][c]
                 x0, y0 = c * T, f * T + HUD_H
-                color = COLOR_CELDA.get(tipo, "#444444")
-                self.__canvas.create_rectangle(x0, y0, x0+T, y0+T, fill=color, outline="")
+                
+                # Renderizado condicional: si hay imagen cargada para este tipo, se usa esa imagen
+                img_celda = IMAGEN_CELDA.get(tipo)
+                if img_celda is not None:
+                    self.__canvas.create_image(x0, y0, image=img_celda, anchor="nw")
+                else:
+                    color = COLOR_CELDA.get(tipo, "#444444")
+                    self.__canvas.create_rectangle(x0, y0, x0+T, y0+T, fill=color, outline=color)
                 
                 if tipo == "MESA" and (f, c) in self.__cocina.mesas_items and self.__cocina.mesas_items[(f, c)]:
                     items = self.__cocina.mesas_items[(f, c)]
@@ -659,14 +827,51 @@ class VistaJuego:
                 else:
                     etq = ETIQUETA_CELDA.get(tipo)
 
-                if etq:
+                # Evita pintar texto plano sobre celdas que ya tienen imagen, o sobre el suelo uniforme
+                if etq and tipo != "SUELO" and IMAGEN_CELDA.get(tipo) is None:
                     self.__canvas.create_text(x0 + T//2, y0 + T//2, text=etq, font=("Arial", 8, "bold"), fill="#000000")
+                elif tipo == "MESA" and (f, c) in self.__cocina.mesas_items and self.__cocina.mesas_items[(f, c)]:
+                    # Si la mesa tiene comida encima, se dibuja la etiqueta flotante sobre el PNG
+                    self.__canvas.create_text(x0 + T//2, y0 + T//2, text=etq, font=("Arial", 8, "bold"), fill="#FFFFFF")
 
     def _d_grid(self):
-        for c in range(COLS + 1):
-            self.__canvas.create_line(c * T, HUD_H, c * T, ALTO_CANVAS, fill=self.COLOR_GRID, width=1)
-        for f in range(FILAS + 1):
-            self.__canvas.create_line(0, f * T + HUD_H, ANCHO_CANVAS, f * T + HUD_H, fill=self.COLOR_GRID, width=1)
+        pass
+
+    def _d_barras_progreso(self):
+        """
+        Dibuja, sobre la celda de la estación, una barra de progreso
+        estilo Overcooked mientras un chef está picando/cocinando/friendo.
+        La barra se llena de izquierda a derecha conforme avanza el tiempo.
+        """
+        for chef in self.__cocina.chefs:
+            if not chef.ocupado or chef.accion_celda is None:
+                continue
+
+            f_celda, c_celda = chef.accion_celda
+            x0 = c_celda * T
+            y0 = f_celda * T + HUD_H
+
+            margen = 6
+            alto_barra = 8
+            bx0 = x0 + margen
+            bx1 = x0 + T - margen
+            by0 = y0 + T - alto_barra - 5
+            by1 = y0 + T - 5
+
+            progreso = chef.progreso_accion()   # 0.0 a 1.0
+            ancho_relleno = (bx1 - bx0) * progreso
+
+            # Fondo de la barra (vacío)
+            self.__canvas.create_rectangle(
+                bx0, by0, bx1, by1,
+                fill="#2B2B2B", outline="#000000", width=1
+            )
+            # Relleno de la barra (progreso actual) — color del chef que la está usando
+            if ancho_relleno > 0:
+                self.__canvas.create_rectangle(
+                    bx0, by0, bx0 + ancho_relleno, by1,
+                    fill=chef.color, outline=""
+                )
 
     def _d_chefs(self):
         R = T // 2 - 4
@@ -780,7 +985,7 @@ def abrir_about(padre: tk.Tk):
         "↑ ↓ ← →    Mover chef activo\n"
         "Tab           Cambiar de chef\n"
         "Q              Interactuar con estación\n\n"
-        "🍟 Locales Disponibles:\n"
+        " Locales Disponibles:\n"
         "1. McDonald's  |  2. La Soda  |  3. Hong Kong"
     )
     tk.Label(v, text=texto, font=("Arial", 11), fg="#7D5A44", bg="#FFF8EA", justify="center").pack(pady=8)
@@ -788,11 +993,8 @@ def abrir_about(padre: tk.Tk):
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  VENTANA PRINCIPAL / MENÚ DE INICIO ORIGINAL (¡CON TU FONDO!)
+#  VENTANA PRINCIPAL / MENÚ DE INICIO (CON FONDO ORIGINAL)
 # ══════════════════════════════════════════════════════════════════════
-directorio_actual = os.path.dirname(os.path.abspath(__file__))
-ruta_fondo = os.path.join(directorio_actual, "Imagenes", "Fondo.png")
-
 ANCHO_INI = 400
 ALTO_INI  = 650
 
