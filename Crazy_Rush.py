@@ -317,7 +317,7 @@ class Receta:
             "Ensalada":         lambda: Receta("Ensalada",         {"Tomate": "picado", "Lechuga": "picado"}),
             "Casado":           lambda: Receta("Casado",           {"Arroz": "cocinado", "Chuleta": "cocinado", "Tomate": "picado"}),
             "Sushi":            lambda: Receta("Sushi",            {"Arroz": "cocinado", "Pescado": "cocinado"}),
-            "Sopa de Pescado":  lambda: Receta("Sopa de Pescado",  {"Tomate": "picado", "Papa": "picado", "Agua": "cocinado", "Pescado": "cocinado"}),
+            "Sopa de Pescado":  lambda: Receta("Sopa de Pescado",  {"Papa": "picado", "Agua": "cocinado", "Pescado": "cocinado"}),
             "Chopsuy":          lambda: Receta("Chopsuy",          {"Pasta": "cocinado", "Tomate": "picado"}),
         }
         return catalogo.get(nombre, lambda: Receta("Ensalada", {"Tomate": "picado", "Lechuga": "picado"}))()
