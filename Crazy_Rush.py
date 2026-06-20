@@ -1,19 +1,3 @@
-"""
-juego.py  —  Crazy Snack Rush TEC
-Todo en un solo archivo. Vista top-down 2D (estilo Bomberman).
-
-SÍMBOLOS DEL MAPA:
-  S = Suelo     (zona caminable)
-  P = Pared     (bloqueada)
-  M = Mesa      (superficie, no caminable)
-  E = Entrega   (única por escenario)
-  B = Basurero  (tira lo que llevas)
-  C = Cocina    (fríe carnes/proteínas)
-  T = Tabla     (pica vegetales)
-  F = Freidora  (solo papas fritas)
-  1..9 = Despensas individuales (cada número dispensa un ingrediente distinto)
-"""
-
 import os
 import tkinter as tk
 from tkinter import messagebox
@@ -184,7 +168,7 @@ CONFIG_ESCENARIOS = {
         "nombre_local": "HONG KONG",
         "recetas": ["Sushi", "Ensalada", "Sopa de Pescado", "Chopsuy"],
         "mapa_raw": [
-            "PPB235789PPPPP",
+            "PPB2357890PPPP",
             "P            P",  
             "P MMMMMMMM P P",  
             "P          P P",  
@@ -248,12 +232,61 @@ class Platillo:
 
 
 class Receta:
+    # Puntos base según cantidad de ingredientes requeridos (más ingredientes = más puntos)
+    PUNTOS_POR_INGREDIENTE = 50
+
+    # Tiempo máximo de entrega: base fija + tiempo extra por cada ingrediente
+    TIEMPO_BASE_SEGUNDOS       = 5    # segundos mínimos garantizados
+    TIEMPO_EXTRA_POR_INGREDIENTE = 5  # segundos adicionales por cada ingrediente
+
     def __init__(self, nombre: str, requisitos: dict):
         self._nombre = nombre
-        self._requisitos = requisitos 
+        self._requisitos = requisitos
+
+        cantidad_ingredientes = len(requisitos)
+
+        # ── Puntos base: a más ingredientes, más puntos ──
+        self._puntos_base = cantidad_ingredientes * self.PUNTOS_POR_INGREDIENTE
+        self._puntos_actuales = self._puntos_base
+
+        # ── Tiempo máximo de entrega: a más ingredientes, más tiempo ──
+        self._tiempo_max = (self.TIEMPO_BASE_SEGUNDOS +
+                             cantidad_ingredientes * self.TIEMPO_EXTRA_POR_INGREDIENTE)
+        self._tiempo_transcurrido = 0
 
     @property
     def nombre(self): return self._nombre
+    @property
+    def requisitos(self): return self._requisitos
+    @property
+    def puntos_base(self): return self._puntos_base
+    @property
+    def puntos_actuales(self): return self._puntos_actuales
+    @property
+    def tiempo_max(self): return self._tiempo_max
+
+    def tiempo_restante(self) -> float:
+        """Segundos que quedan antes de que la puntuación se reduzca a la mitad otra vez."""
+        return max(0.0, self._tiempo_max - self._tiempo_transcurrido)
+
+    def tiempo_restante_fmt(self) -> str:
+        t = int(self.tiempo_restante())
+        return f"{t//60:02d}:{t%60:02d}" if t >= 60 else f"{t}s"
+
+    def tick(self, dt: float = 1):
+        """
+        Avanza el cronómetro de la receta.
+        Cada vez que se cumple tiempo_max desde el último corte,
+        la puntuación se reduce a la mitad (hasta llegar a 0).
+        """
+        self._tiempo_transcurrido += dt
+        if self._tiempo_transcurrido >= self._tiempo_max:
+            self._puntos_actuales = self._puntos_actuales // 2
+            self._tiempo_transcurrido = 0   # reinicia el ciclo de penalización
+
+    def esta_agotada(self) -> bool:
+        """True si la puntuación llegó a cero (la receta debe eliminarse)."""
+        return self._puntos_actuales <= 0
 
     def comparar_con_lista(self, lista_elementos) -> bool:
         if len(lista_elementos) == 1 and isinstance(lista_elementos[0], Platillo):
@@ -463,13 +496,14 @@ class Cocina:
         for i, receta in enumerate(self.__ordenes):
             if receta.comparar_con_lista(lista_elementos):
                 self.__ordenes.pop(i)
-                self.__puntos += 100
+                puntos_ganados = receta.puntos_actuales
+                self.__puntos += puntos_ganados
                 self.__pedidos_entregados += 1
                 
                 if len(self.__ordenes) == 0:
                     self.generar_receta()
                 
-                return True, f"¡Éxito! Entregado [{receta.nombre}] +100 pts"
+                return True, f"¡Éxito! Entregado [{receta.nombre}] +{puntos_ganados} pts"
         
         return False, "Los ingredientes no corresponden a ninguna orden activa."
 
@@ -486,6 +520,15 @@ class Cocina:
         if self.__t_receta >= self.INTERVALO_NUEVA:
             self.generar_receta()
             self.__t_receta = 0
+
+        # ── Avanzar el cronómetro de cada receta y aplicar penalizaciones ──
+        for receta in list(self.__ordenes):
+            receta.tick(1)
+            if receta.esta_agotada():
+                # La receta caducó por completo: se elimina y se descuenta
+                # del puntaje el valor ORIGINAL de la receta (puntos_base).
+                self.__puntos = max(0, self.__puntos - receta.puntos_base)
+                self.__ordenes.remove(receta)
 
         if self.__tiempo <= 0:
             self.__tiempo = 0
@@ -801,10 +844,13 @@ class VistaJuego:
 
         ords = self.__cocina.ordenes
         if ords:
-            txt = "PEDIDOS PENDIENTES: " + "  |  ".join(r.nombre for r in ords)
+            partes = []
+            for r in ords:
+                partes.append(f"{r.nombre} [{r.puntos_actuales}pts·{r.tiempo_restante_fmt()}]")
+            txt = "PEDIDOS: " + "  |  ".join(partes)
         else:
             txt = "Sin órdenes activas"
-        cv.create_text(ANCHO_CANVAS//2, 64, text=txt, font=("Arial", 10, "bold"), fill="#FFC880")
+        cv.create_text(ANCHO_CANVAS//2, 64, text=txt, font=("Arial", 9, "bold"), fill="#FFC880")
         cv.create_line(0, HUD_H, ANCHO_CANVAS, HUD_H, fill="#333333", width=2)
 
     def _d_celdas(self):
